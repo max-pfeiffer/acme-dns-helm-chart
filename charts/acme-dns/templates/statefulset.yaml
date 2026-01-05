@@ -1,13 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "acme-dns.fullname" . }}
   labels:
     {{- include "acme-dns.labels" . | nindent 4 }}
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
-  {{- end }}
+  serviceName: {{ include "acme-dns.fullname" . }}
+  replicas: 1
   selector:
     matchLabels:
       {{- include "acme-dns.selectorLabels" . | nindent 6 }}
@@ -41,29 +40,32 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: http
-              containerPort: {{ .Values.service.port }}
+            - name: api
+              containerPort: {{ .Values.ports.api }}
               protocol: TCP
-          {{- with .Values.livenessProbe }}
+            - name: dns-tcp
+              containerPort: {{ .Values.ports.dnsTcp }}
+              protocol: TCP
+            - name: dns-udp
+              containerPort: {{ .Values.ports.dnsUdp }}
+              protocol: UDP
           livenessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.readinessProbe }}
+            httpGet:
+              path: /health
+              port: api
           readinessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            httpGet:
+              path: /health
+              port: api
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.volumeMounts }}
           volumeMounts:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.volumes }}
-      volumes:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
+            - name: config
+              mountPath: "/etc/acme-dns"
+            - name: sqlite
+              mountPath: "/var/lib/acme-dns"
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -76,3 +78,16 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "acme-dns.fullname" . }}
+  volumeClaimTemplates:
+  - metadata:
+      name: sqlite
+    spec:
+      accessModes:
+        - "ReadWriteOnce"
+      resources:
+        requests:
+          storage: {{ .Values.sqliteVolumeSize }}

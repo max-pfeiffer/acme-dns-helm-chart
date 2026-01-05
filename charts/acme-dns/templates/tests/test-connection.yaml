@@ -11,5 +11,5 @@ spec:
     - name: wget
       image: busybox
       command: ['wget']
-      args: ['{{ include "acme-dns.fullname" . }}:{{ .Values.service.port }}']
+      args: ['{{ include "acme-dns.fullname" . }}-api:{{ .Values.ports.api }}']
   restartPolicy: Never
