@@ -35,9 +35,9 @@ spec:
             {{- end }}
             backend:
               service:
-                name: {{ include "acme-dns.fullname" $ }}
+                name: {{ include "acme-dns.fullname" $ }}-api
                 port:
-                  number: {{ $.Values.service.port }}
+                  number: {{ $.Values.ports.api }}
           {{- end }}
     {{- end }}
 {{- end }}

@@ -129,6 +129,15 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
+livenessProbe:
+  httpGet:
+    path: /health
+    port: api
+readinessProbe:
+  httpGet:
+    path: /health
+    port: api
+
 nodeSelector: {}
 
 tolerations: []

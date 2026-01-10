@@ -49,13 +49,14 @@ spec:
             - name: dns-udp
               containerPort: {{ .Values.ports.dnsUdp }}
               protocol: UDP
-          readinessProbe:
-            tcpSocket:
-              port: 443
+          {{- with .Values.livenessProbe }}
           livenessProbe:
-            httpGet:
-              path: /health
-              port: api
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
