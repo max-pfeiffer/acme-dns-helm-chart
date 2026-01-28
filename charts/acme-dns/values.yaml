@@ -49,18 +49,22 @@ securityContext: {}
   # runAsNonRoot: true
   # runAsUser: 1000
 
-ports:
-  api: 443
-  dnsTcp: 53
-  dnsUdp: 53
-
 services:
-  headless:
-    type: ClusterIP
   api:
     type: LoadBalancer
+    ports:
+      api: 443
+    metadata:
+      labels: {}
+      annotations: {}
   dns:
     type: LoadBalancer
+    ports:
+      dnsTcp: 53
+      dnsUdp: 53
+    metadata:
+      labels: {}
+      annotations: {}
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:

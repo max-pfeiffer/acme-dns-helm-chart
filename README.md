@@ -1,6 +1,9 @@
 # acme-dns-server-helm-chart
 A Helm chart for [acme-dns server](https://github.com/joohoi/acme-dns).
 
+This Helm chart runs [acme-dns server](https://github.com/joohoi/acme-dns) as StatefulSet with SQLite database.
+Using PostgreSql as database is not supported by this Helm chart.
+
 ## Installation
 
 ## Usage
@@ -9,11 +12,11 @@ When you run [acme-dns](https://github.com/joohoi/acme-dns) in the same cluster 
 instance, you don't need to expose the [acme-dns](https://github.com/joohoi/acme-dns) API with an Ingress or HTTPRoute.
 It is also acceptable not to use TLS for the API endpoints. A config for this use case would look like this:
 ```yaml
-ports:
-  api: 80
 services:
   api:
     type: ClusterIP
+    ports:
+      api: 80
 config: |
   [api]
   # listen port, eg. 443 for default HTTPS

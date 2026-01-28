@@ -41,13 +41,13 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: api
-              containerPort: {{ .Values.ports.api }}
+              containerPort: {{ .Values.services.api.ports.api }}
               protocol: TCP
             - name: dns-tcp
-              containerPort: {{ .Values.ports.dnsTcp }}
+              containerPort: {{ .Values.services.dns.ports.dnsTcp }}
               protocol: TCP
             - name: dns-udp
-              containerPort: {{ .Values.ports.dnsUdp }}
+              containerPort: {{ .Values.services.dns.ports.dnsUdp }}
               protocol: UDP
           {{- with .Values.livenessProbe }}
           livenessProbe:

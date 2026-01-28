@@ -5,18 +5,18 @@ metadata:
   labels:
     {{- include "acme-dns.labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.services.headless.type }}
+  type: ClusterIP
   clusterIP: None
   ports:
-    - port: {{ .Values.ports.api }}
+    - port: {{ .Values.services.api.ports.api }}
       targetPort: api
       protocol: TCP
       name: api
-    - port: {{ .Values.ports.dnsTcp }}
+    - port: {{ .Values.services.dns.ports.dnsTcp }}
       targetPort: dns-tcp
       protocol: TCP
       name: dns-tcp
-    - port: {{ .Values.ports.dnsUdp }}
+    - port: {{ .Values.services.dns.ports.dnsUdp }}
       targetPort: dns-udp
       protocol: UDP
       name: dns-udp
@@ -29,10 +29,17 @@ metadata:
   name: {{ include "acme-dns.fullname" . }}-api
   labels:
     {{- include "acme-dns.labels" . | nindent 4 }}
+    {{- with .Values.services.api.metadata.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.services.api.metadata.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ .Values.services.api.type }}
   ports:
-    - port: {{ .Values.ports.api }}
+    - port: {{ .Values.services.api.ports.api }}
       targetPort: api
       protocol: TCP
       name: api
@@ -45,14 +52,21 @@ metadata:
   name: {{ include "acme-dns.fullname" . }}-dns
   labels:
     {{- include "acme-dns.labels" . | nindent 4 }}
+    {{- with .Values.services.dns.metadata.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.services.api.metadata.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ .Values.services.dns.type }}
   ports:
-    - port: {{ .Values.ports.dnsTcp }}
+    - port: {{ .Values.services.dns.ports.dnsTcp }}
       targetPort: dns-tcp
       protocol: TCP
       name: dns-tcp
-    - port: {{ .Values.ports.dnsUdp }}
+    - port: {{ .Values.services.dns.ports.dnsUdp }}
       targetPort: dns-udp
       protocol: UDP
       name: dns-udp
