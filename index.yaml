@@ -3,6 +3,16 @@ entries:
   acme-dns:
   - apiVersion: v2
     appVersion: v1.0
+    created: "2026-02-01T11:21:54.966799834Z"
+    description: A Helm chart for installing acme-dns
+    digest: 5e37ccf079caaa33264e083847342a786063bc81ed6d69c1c0711c5e6cf4c46d
+    name: acme-dns
+    type: application
+    urls:
+    - https://github.com/max-pfeiffer/acme-dns-server-helm-chart/releases/download/acme-dns-0.1.1/acme-dns-0.1.1.tgz
+    version: 0.1.1
+  - apiVersion: v2
+    appVersion: v1.0
     created: "2026-01-30T07:20:43.295795867Z"
     description: A Helm chart for installing acme-dns
     digest: 2c34b9ac03e7488a344cf2154a5c1b551642bae0b3cc4fda06160ecba7441ac1
@@ -11,4 +21,4 @@ entries:
     urls:
     - https://github.com/max-pfeiffer/acme-dns-server-helm-chart/releases/download/acme-dns-0.1.0/acme-dns-0.1.0.tgz
     version: 0.1.0
-generated: "2026-01-30T07:20:43.295801398Z"
+generated: "2026-02-01T11:21:54.966807158Z"
