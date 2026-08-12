@@ -163,7 +163,7 @@ affinity: {}
 
 sqliteVolumeSize: 100M
 
-# See: https://github.com/joohoi/acme-dns
+# See: https://github.com/acme-dns/acme-dns
 config: |
   [general]
   # DNS interface. Note that systemd-resolved may reserve port 53 on 127.0.0.53
