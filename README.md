@@ -1,8 +1,53 @@
 # ACME DNS Server Helm Chart
 A Helm chart for [acme-dns server](https://github.com/acme-dns/acme-dns).
 
-This Helm chart runs [acme-dns](https://github.com/acme-dns/acme-dns) as StatefulSet with a SQLite database.
-Using PostgreSql as database is currently not supported by this Helm chart.
+This Helm chart runs [acme-dns](https://github.com/acme-dns/acme-dns) with either a SQLite or a PostgreSQL database.
+
+## Database engine
+The `database.engine` value selects the database engine and, with it, the chart's topology. It must match
+`[database].engine` in the `config` blob — the chart does not parse that blob.
+
+| `database.engine` | Workload                          | Storage                          | `replicaCount` |
+|-------------------|-----------------------------------|----------------------------------|----------------|
+| `sqlite`          | StatefulSet, `acme-dns`           | per-pod PersistentVolumeClaim    | `1` only       |
+| `postgres`        | Deployment, `acme-dns-server`     | none, state lives in PostgreSQL  | `1` or more    |
+
+With SQLite the database is a file on a `ReadWriteOnce` volume that cannot be shared, so each replica would get
+its own independent database. The chart refuses to render `replicaCount` > 1 in that case.
+
+### Using PostgreSQL
+```yaml
+database:
+  engine: postgres
+replicaCount: 2
+config: |
+  [database]
+  engine = "postgres"
+  connection = "postgres://user:password@postgresql/acmedns_db?sslmode=require"
+```
+acme-dns creates its own schema on startup. Before running more than one replica, please note:
+
+* **Run the first release with `replicaCount: 1`.** Schema creation and the v0 → v1 migration are not locked, so
+  concurrent startups against an unmigrated database can duplicate or drop rows in the `txt` table. Scale up
+  afterwards.
+* **Create the index by hand.** acme-dns v2.0.2 does not create an index on `txt.Subdomain`, so every DNS query
+  is a full table scan whose cost grows with the number of registered accounts:
+  ```sql
+  CREATE INDEX IF NOT EXISTS idx_txt_subdomain ON txt (Subdomain);
+  ```
+  Later acme-dns versions create the same index at startup, so this is forward compatible.
+* **Do not use `tls = "letsencrypt"` with more than one replica.** Each replica keeps its own certificate cache
+  and answers the ACME DNS-01 challenge for its own certificate from process memory, so validation fails as soon
+  as the CA reaches a different pod. Use `tls = "cert"` with a shared certificate, or `tls = "none"` behind an
+  Ingress/HTTPRoute.
+* Two `/update` calls for the same subdomain that overlap in time can write to the same `txt` row and lose one of
+  the two challenge values. The window is small and only exists with more than one replica.
+
+### Switching an existing release from SQLite to PostgreSQL
+The PostgreSQL Deployment deliberately has a different name (`-server` suffix) from the SQLite StatefulSet,
+because Helm cannot change the kind of an existing resource in place. Switching engines therefore works as a
+normal `helm upgrade`: the StatefulSet is removed and the Deployment created. Its PersistentVolumeClaim is
+*not* deleted with it — remove it yourself once you no longer need the SQLite data.
 
 ## Installation
 The installation is done as follows:

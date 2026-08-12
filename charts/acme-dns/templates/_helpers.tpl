@@ -51,6 +51,40 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Name of the Deployment used when database.engine is "postgres".
+Deliberately distinct from the StatefulSet name: Helm cannot change the kind of
+an existing resource in place, so a release switching from SQLite to PostgreSQL
+would otherwise fail with an immutable-field error.
+*/}}
+{{- define "acme-dns.deploymentName" -}}
+{{- printf "%s-server" (include "acme-dns.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Selector for the API and DNS Services.
+With SQLite the workload is a single-replica StatefulSet whose per-pod PVC holds
+the database file, so the Services are pinned to pod 0. With PostgreSQL every
+replica is interchangeable and shares one database, so the Services select all
+pods and traffic is load balanced across them.
+*/}}
+{{- define "acme-dns.serviceSelector" -}}
+{{- if eq .Values.database.engine "sqlite" -}}
+statefulset.kubernetes.io/pod-name: {{ include "acme-dns.fullname" . }}-0
+{{- else -}}
+{{- include "acme-dns.selectorLabels" . -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Fail on value combinations that cannot work.
+*/}}
+{{- define "acme-dns.validateValues" -}}
+{{- if and (eq .Values.database.engine "sqlite") (gt (int .Values.replicaCount) 1) -}}
+{{- fail "database.engine=\"sqlite\" supports replicaCount=1 only: every replica gets its own PersistentVolumeClaim and therefore its own, independent database file. Set database.engine=\"postgres\" (and point [database].connection in `config` at PostgreSQL) to run more than one replica." -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "acme-dns.serviceAccountName" -}}
