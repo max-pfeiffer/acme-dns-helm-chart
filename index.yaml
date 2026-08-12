@@ -2,6 +2,30 @@ apiVersion: v1
 entries:
   acme-dns:
   - apiVersion: v2
+    appVersion: v2.0.2
+    created: "2026-08-12T21:33:59.81782856Z"
+    description: A Helm chart for installing acme-dns
+    digest: 0543177f3866aba8c9991f37d656a3ec82ea950627866ab938e36f266188d0be
+    home: https://github.com/max-pfeiffer/acme-dns-server-helm-chart
+    keywords:
+    - acme-dns
+    - acme
+    - dns-01
+    - cert-manager
+    - lets-encrypt
+    maintainers:
+    - email: max@maxpfeiffer.ch
+      name: max-pfeiffer
+      url: https://github.com/max-pfeiffer
+    name: acme-dns
+    sources:
+    - https://github.com/max-pfeiffer/acme-dns-server-helm-chart
+    - https://github.com/acme-dns/acme-dns
+    type: application
+    urls:
+    - https://github.com/max-pfeiffer/acme-dns-server-helm-chart/releases/download/acme-dns-0.2.0/acme-dns-0.2.0.tgz
+    version: 0.2.0
+  - apiVersion: v2
     appVersion: v1.0
     created: "2026-02-01T11:21:54.966799834Z"
     description: A Helm chart for installing acme-dns
@@ -21,4 +45,4 @@ entries:
     urls:
     - https://github.com/max-pfeiffer/acme-dns-server-helm-chart/releases/download/acme-dns-0.1.0/acme-dns-0.1.0.tgz
     version: 0.1.0
-generated: "2026-02-01T11:21:54.966807158Z"
+generated: "2026-08-12T21:33:59.817850325Z"
