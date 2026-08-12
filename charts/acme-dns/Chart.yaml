@@ -1,6 +1,20 @@
 apiVersion: v2
 name: acme-dns
 description: A Helm chart for installing acme-dns
+home: https://github.com/max-pfeiffer/acme-dns-server-helm-chart
+sources:
+  - https://github.com/max-pfeiffer/acme-dns-server-helm-chart
+  - https://github.com/acme-dns/acme-dns
+maintainers:
+  - name: max-pfeiffer
+    email: max@maxpfeiffer.ch
+    url: https://github.com/max-pfeiffer
+keywords:
+  - acme-dns
+  - acme
+  - dns-01
+  - cert-manager
+  - lets-encrypt
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -15,10 +29,10 @@ type: application
 # This is the chart version. This version number should be incremented each time you make changes
 # to the chart and its templates, including the app version.
 # Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.1.1
+version: 0.2.0
 
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "v1.0"
+appVersion: "v2.0.2"

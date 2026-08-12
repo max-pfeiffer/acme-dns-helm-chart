@@ -1,6 +1,6 @@
 {{- if .Values.httpRoute.enabled -}}
 {{- $fullName := include "acme-dns.fullname" . -}}
-{{- $svcPort := .Values.ports.api -}}
+{{- $svcPort := .Values.services.api.ports.api -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

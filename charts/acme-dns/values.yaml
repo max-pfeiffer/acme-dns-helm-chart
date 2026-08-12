@@ -2,9 +2,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
-replicaCount: 1
-
 # This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
 image:
   repository: joohoi/acme-dns
@@ -23,8 +20,9 @@ fullnameOverride: ""
 serviceAccount:
   # Specifies whether a service account should be created.
   create: true
-  # Automatically mount a ServiceAccount's API credentials?
-  automount: true
+  # Automatically mount a ServiceAccount's API credentials? acme-dns never calls
+  # the Kubernetes API, so this is disabled by default.
+  automount: false
   # Annotations to add to the service account.
   annotations: {}
   # The name of the service account to use.
@@ -38,22 +36,37 @@ podAnnotations: {}
 # For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
 podLabels: {}
 
-podSecurityContext: {}
-  # fsGroup: 2000
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
 
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+    # NET_BIND_SERVICE is required to bind the DNS listener to port 53 (a
+    # privileged port) without running the container as root. The upstream
+    # joohoi/acme-dns image has no USER directive and runs as root by default.
+    add:
+      - NET_BIND_SERVICE
 
 services:
   api:
     type: LoadBalancer
+    # Default is plain HTTP on port 80, matching the default `tls = "none"`
+    # config below. This is the documented pattern for running acme-dns
+    # alongside cert-manager in the same cluster (TLS terminated elsewhere,
+    # e.g. by an Ingress/HTTPRoute or because the API is only reached
+    # in-cluster). Set this to 443 and switch `tls` to "letsencrypt",
+    # "letsencryptstaging" or "cert" if the API should terminate TLS itself.
     ports:
-      api: 443
+      api: 80
     metadata:
       labels: {}
       annotations: {}
@@ -150,7 +163,7 @@ affinity: {}
 
 sqliteVolumeSize: 100M
 
-# See: https://github.com/joohoi/acme-dns
+# See: https://github.com/acme-dns/acme-dns
 config: |
   [general]
   # DNS interface. Note that systemd-resolved may reserve port 53 on 127.0.0.53
@@ -189,9 +202,9 @@ config: |
   # disable registration endpoint
   disable_registration = false
   # listen port, eg. 443 for default HTTPS
-  port = "443"
+  port = "80"
   # possible values: "letsencrypt", "letsencryptstaging", "cert", "none"
-  tls = "letsencryptstaging"
+  tls = "none"
   # only used if tls = "cert"
   tls_cert_privkey = "/etc/tls/example.org/privkey.pem"
   tls_cert_fullchain = "/etc/tls/example.org/fullchain.pem"
