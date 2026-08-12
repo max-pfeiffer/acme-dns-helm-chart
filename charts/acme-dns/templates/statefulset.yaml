@@ -6,6 +6,8 @@ metadata:
     {{- include "acme-dns.labels" . | nindent 4 }}
 spec:
   serviceName: {{ include "acme-dns.fullname" . }}
+  # acme-dns keeps its state in a single SQLite file on the volumeClaimTemplate
+  # below; this chart is not designed to run more than one replica.
   replicas: 1
   selector:
     matchLabels:
@@ -64,8 +66,13 @@ spec:
           volumeMounts:
             - name: config
               mountPath: "/etc/acme-dns"
+              readOnly: true
             - name: sqlite
               mountPath: "/var/lib/acme-dns"
+            - name: tmp
+              mountPath: "/tmp"
+            - name: home
+              mountPath: "/root"
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -80,8 +87,14 @@ spec:
       {{- end }}
       volumes:
         - name: config
-          configMap:
-            name: {{ include "acme-dns.fullname" . }}
+          secret:
+            secretName: {{ include "acme-dns.fullname" . }}
+        - name: tmp
+          emptyDir: {}
+        # Writable home dir for the container's WORKDIR (/root); used e.g. as
+        # the default relative path for acme_cache_dir when tls = "letsencrypt".
+        - name: home
+          emptyDir: {}
   volumeClaimTemplates:
   - metadata:
       name: sqlite

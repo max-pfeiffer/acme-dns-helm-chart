@@ -1,6 +1,20 @@
 apiVersion: v2
 name: acme-dns
 description: A Helm chart for installing acme-dns
+home: https://github.com/max-pfeiffer/acme-dns-server-helm-chart
+sources:
+  - https://github.com/max-pfeiffer/acme-dns-server-helm-chart
+  - https://github.com/joohoi/acme-dns
+maintainers:
+  - name: max-pfeiffer
+    email: max@maxpfeiffer.ch
+    url: https://github.com/max-pfeiffer
+keywords:
+  - acme-dns
+  - acme
+  - dns-01
+  - cert-manager
+  - lets-encrypt
 
 # A chart can be either an 'application' or a 'library' chart.
 #

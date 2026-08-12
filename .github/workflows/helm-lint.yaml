@@ -16,3 +16,10 @@ jobs:
       - name: Lint Helm chart
         run: |
           helm lint charts/acme-dns
+          helm lint charts/acme-dns --set ingress.enabled=true
+          helm lint charts/acme-dns --set httpRoute.enabled=true
+      - name: Render Helm chart templates
+        run: |
+          helm template charts/acme-dns > /dev/null
+          helm template charts/acme-dns --set ingress.enabled=true > /dev/null
+          helm template charts/acme-dns --set httpRoute.enabled=true > /dev/null
