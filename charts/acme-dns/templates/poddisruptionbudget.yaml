@@ -1,0 +1,22 @@
+{{/*
+Only rendered for the PostgreSQL Deployment with more than one replica. With
+SQLite there is exactly one pod holding the only copy of the database, so a
+PodDisruptionBudget would block node drains forever without protecting anything.
+*/}}
+{{- if and (eq .Values.database.engine "postgres") .Values.podDisruptionBudget.enabled (gt (int .Values.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "acme-dns.fullname" . }}
+  labels:
+    {{- include "acme-dns.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "acme-dns.selectorLabels" . | nindent 6 }}
+{{- end }}

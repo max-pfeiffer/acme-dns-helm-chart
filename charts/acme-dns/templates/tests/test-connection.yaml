@@ -2,14 +2,19 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: "{{ include "acme-dns.fullname" . }}-test-connection"
+  # Deliberately not acme-dns.labels: those contain the Service selector labels,
+  # which would make the -api and -dns Services pick this pod up as an endpoint.
   labels:
-    {{- include "acme-dns.labels" . | nindent 4 }}
+    helm.sh/chart: {{ include "acme-dns.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: test
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
   annotations:
     "helm.sh/hook": test
 spec:
   containers:
     - name: wget
-      image: busybox
+      image: busybox:1.37
       command: ['wget']
       args: ['{{ include "acme-dns.fullname" . }}-api:{{ .Values.services.api.ports.api }}']
   restartPolicy: Never

@@ -51,10 +51,20 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Base for the workload names below. The fullname is truncated well short of 63
+characters first so that appending a suffix cannot push the two workload names
+into the same truncated string, and so that the StatefulSet's pod names
+(<name>-<ordinal>) stay within the 63 character DNS label limit.
+*/}}
+{{- define "acme-dns.workloadNameBase" -}}
+{{- include "acme-dns.fullname" . | trunc 50 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
 Name of the StatefulSet used when database.engine is "sqlite".
 */}}
 {{- define "acme-dns.statefulSetName" -}}
-{{- printf "%s-stateful" (include "acme-dns.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- printf "%s-stateful" (include "acme-dns.workloadNameBase" .) }}
 {{- end }}
 
 {{/*
@@ -64,7 +74,7 @@ an existing resource in place, so a release switching from SQLite to PostgreSQL
 would otherwise fail with an immutable-field error.
 */}}
 {{- define "acme-dns.deploymentName" -}}
-{{- printf "%s-stateless" (include "acme-dns.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- printf "%s-stateless" (include "acme-dns.workloadNameBase" .) }}
 {{- end }}
 
 {{/*
@@ -72,14 +82,15 @@ Selector for the API and DNS Services.
 With SQLite the workload is a single-replica StatefulSet whose per-pod PVC holds
 the database file, so the Services are pinned to pod 0. With PostgreSQL every
 replica is interchangeable and shares one database, so the Services select all
-pods and traffic is load balanced across them.
+pods and traffic is load balanced across them. The app labels are part of the
+selector in both cases, so a same-named pod from another workload cannot be
+picked up.
 */}}
 {{- define "acme-dns.serviceSelector" -}}
-{{- if eq .Values.database.engine "sqlite" -}}
+{{- include "acme-dns.selectorLabels" . }}
+{{- if eq .Values.database.engine "sqlite" }}
 statefulset.kubernetes.io/pod-name: {{ include "acme-dns.statefulSetName" . }}-0
-{{- else -}}
-{{- include "acme-dns.selectorLabels" . -}}
-{{- end -}}
+{{- end }}
 {{- end }}
 
 {{/*
@@ -100,4 +111,114 @@ Create the name of the service account to use
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
+{{- end }}
+
+{{/*
+Pod template shared by the StatefulSet (sqlite) and the Deployment (postgres).
+The only difference between the two is the SQLite volume, which comes from the
+StatefulSet's volumeClaimTemplate and therefore only exists for that engine.
+*/}}
+{{- define "acme-dns.podTemplate" -}}
+metadata:
+  annotations:
+    # acme-dns parses config.cfg once, at process start. Without this checksum a
+    # change to `config` would update the Secret but leave the pod template
+    # byte-identical, so `helm upgrade` would succeed while the pods kept
+    # running the old configuration.
+    checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    {{- with .Values.podAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  labels:
+    {{- include "acme-dns.labels" . | nindent 4 }}
+    {{- with .Values.podLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  serviceAccountName: {{ include "acme-dns.serviceAccountName" . }}
+  {{- with .Values.podSecurityContext }}
+  securityContext:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  containers:
+    - name: {{ .Chart.Name }}
+      {{- with .Values.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+      ports:
+        - name: api
+          containerPort: {{ .Values.containerPorts.api }}
+          protocol: TCP
+        - name: dns-tcp
+          containerPort: {{ .Values.containerPorts.dnsTcp }}
+          protocol: TCP
+        - name: dns-udp
+          containerPort: {{ .Values.containerPorts.dnsUdp }}
+          protocol: UDP
+      {{- with .Values.livenessProbe }}
+      livenessProbe:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.readinessProbe }}
+      readinessProbe:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.resources }}
+      resources:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumeMounts:
+        - name: config
+          mountPath: "/etc/acme-dns"
+          readOnly: true
+        {{- if eq .Values.database.engine "sqlite" }}
+        - name: sqlite
+          mountPath: "/var/lib/acme-dns"
+        {{- end }}
+        - name: tmp
+          mountPath: "/tmp"
+        - name: home
+          mountPath: "/root"
+  {{- with .Values.nodeSelector }}
+  nodeSelector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.affinity }}
+  affinity:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.tolerations }}
+  tolerations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.topologySpreadConstraints }}
+  topologySpreadConstraints:
+    {{- range . }}
+    - {{ toYaml . | nindent 6 | trim }}
+      {{- if not .labelSelector }}
+      labelSelector:
+        matchLabels:
+          {{- include "acme-dns.selectorLabels" $ | nindent 10 }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  volumes:
+    - name: config
+      secret:
+        secretName: {{ include "acme-dns.fullname" . }}
+    - name: tmp
+      emptyDir: {}
+    # Writable home dir for the container's WORKDIR (/root); used e.g. as the
+    # default relative path for acme_cache_dir when tls = "letsencrypt". Note
+    # that this is per-pod and lost on restart: with more than one replica,
+    # terminate TLS elsewhere and use tls = "none" or "cert".
+    - name: home
+      emptyDir: {}
 {{- end }}

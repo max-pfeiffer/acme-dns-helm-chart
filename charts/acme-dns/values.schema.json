@@ -8,12 +8,20 @@
     "database": {
       "type": "object",
       "required": ["engine"],
+      "additionalProperties": false,
       "properties": {
         "engine": { "type": "string", "enum": ["sqlite", "postgres"] }
       }
     },
     "replicaCount": { "type": "integer", "minimum": 1 },
-    "strategy": { "type": "object" },
+    "strategy": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["RollingUpdate", "Recreate"] },
+        "rollingUpdate": { "type": "object" }
+      }
+    },
     "image": {
       "type": "object",
       "required": ["repository"],
@@ -39,6 +47,16 @@
     "podLabels": { "type": "object" },
     "podSecurityContext": { "type": "object" },
     "securityContext": { "type": "object" },
+    "containerPorts": {
+      "type": "object",
+      "required": ["api", "dnsTcp", "dnsUdp"],
+      "additionalProperties": false,
+      "properties": {
+        "api": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "dnsTcp": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "dnsUdp": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      }
+    },
     "services": {
       "type": "object",
       "required": ["api", "dns"],
@@ -114,7 +132,22 @@
     "nodeSelector": { "type": "object" },
     "tolerations": { "type": "array" },
     "affinity": { "type": "object" },
-    "sqliteVolumeSize": { "type": "string" },
+    "topologySpreadConstraints": { "type": "array", "items": { "type": "object" } },
+    "podDisruptionBudget": {
+      "type": "object",
+      "required": ["enabled"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "maxUnavailable": { "type": ["integer", "string"] },
+        "minAvailable": { "type": ["integer", "string"] }
+      }
+    },
+    "sqliteVolumeSize": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+)?(E|P|T|G|M|k|Ei|Pi|Ti|Gi|Mi|Ki)?$"
+    },
+    "sqliteStorageClass": { "type": "string" },
     "config": { "type": "string" }
   }
 }

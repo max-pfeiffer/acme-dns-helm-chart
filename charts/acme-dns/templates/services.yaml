@@ -1,3 +1,7 @@
+{{/*
+Governing (headless) Service for the StatefulSet. Rendered for both engines on
+purpose, so that the name stays stable across an engine switch.
+*/}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,6 +11,9 @@ metadata:
 spec:
   type: ClusterIP
   clusterIP: None
+  # Standard for a governing Service: pods get their DNS record before they pass
+  # their readiness probe.
+  publishNotReadyAddresses: true
   ports:
     - port: {{ .Values.services.api.ports.api }}
       targetPort: api

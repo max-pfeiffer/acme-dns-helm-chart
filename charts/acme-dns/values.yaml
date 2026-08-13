@@ -67,6 +67,10 @@ podSecurityContext:
   runAsUser: 1000
   runAsGroup: 1000
   fsGroup: 1000
+  # Required by the "restricted" Pod Security Standard; without it the pods are
+  # rejected in namespaces labelled pod-security.kubernetes.io/enforce=restricted.
+  seccompProfile:
+    type: RuntimeDefault
 
 securityContext:
   allowPrivilegeEscalation: false
@@ -76,21 +80,36 @@ securityContext:
   capabilities:
     drop:
       - ALL
-    # NET_BIND_SERVICE is required to bind the DNS listener to port 53 (a
-    # privileged port) without running the container as root. The upstream
-    # joohoi/acme-dns image has no USER directive and runs as root by default.
+    # NET_BIND_SERVICE covers binding the DNS listener to port 53 on clusters
+    # that still treat it as a privileged port. Kubernetes sets
+    # net.ipv4.ip_unprivileged_port_start=0 in the pod sandbox since 1.22, so on
+    # a current cluster the bind succeeds without it; it is kept here for older
+    # clusters and for runtimes that do not set that sysctl. It is also the one
+    # capability the "restricted" Pod Security Standard still allows.
     add:
       - NET_BIND_SERVICE
+
+# Ports the acme-dns process listens on inside the container. These must match
+# the `config` blob at the bottom of this file ([api].port and [general].listen)
+# — the chart does not parse it. They are deliberately separate from the Service
+# ports below: the Services resolve their targetPort by name, so the port a
+# client connects to can differ from the port acme-dns binds.
+containerPorts:
+  api: 80
+  dnsTcp: 53
+  dnsUdp: 53
 
 services:
   api:
     type: LoadBalancer
-    # Default is plain HTTP on port 80, matching the default `tls = "none"`
-    # config below. This is the documented pattern for running acme-dns
-    # alongside cert-manager in the same cluster (TLS terminated elsewhere,
-    # e.g. by an Ingress/HTTPRoute or because the API is only reached
-    # in-cluster). Set this to 443 and switch `tls` to "letsencrypt",
-    # "letsencryptstaging" or "cert" if the API should terminate TLS itself.
+    # The port clients connect to. Default is plain HTTP on port 80, matching
+    # the default `tls = "none"` config below. This is the documented pattern
+    # for running acme-dns alongside cert-manager in the same cluster (TLS
+    # terminated elsewhere, e.g. by an Ingress/HTTPRoute or because the API is
+    # only reached in-cluster). To have acme-dns terminate TLS itself, set
+    # `tls` to "letsencrypt", "letsencryptstaging" or "cert", set [api].port
+    # and containerPorts.api to 443, and set `scheme: HTTPS` on the probes
+    # below — they default to plain HTTP and will otherwise fail.
     ports:
       api: 80
     metadata:
@@ -98,6 +117,10 @@ services:
       annotations: {}
   dns:
     type: LoadBalancer
+    # Note that this exposes TCP and UDP port 53 through a single Service. Not
+    # every cloud load balancer supports mixed-protocol Services; if yours does
+    # not, set type: ClusterIP here and expose the DNS ports by other means
+    # (e.g. hostNetwork on a dedicated node pool, or a provider-specific LB).
     ports:
       dnsTcp: 53
       dnsUdp: 53
@@ -172,10 +195,15 @@ resources: {}
   #   cpu: 100m
   #   memory: 128Mi
 
+# Liveness is checked on the DNS listener rather than on the API, because it is
+# the port that has to work for ACME challenge validation and because a TCP
+# check is unaffected by whether the API terminates TLS.
 livenessProbe:
-  httpGet:
-    path: /health
-    port: api
+  tcpSocket:
+    port: dns-tcp
+# /health is served by the API listener. If acme-dns terminates TLS itself
+# (`tls` is not "none" in the config below), add `scheme: HTTPS` here — the
+# default is plain HTTP and the pod would never become ready.
 readinessProbe:
   httpGet:
     path: /health
@@ -187,9 +215,36 @@ tolerations: []
 
 affinity: {}
 
+# Spread replicas over nodes, so that a single node failure or drain does not
+# take the whole DNS service down. A labelSelector matching this release is
+# added automatically to every entry that does not define one. Only has an
+# effect with database.engine = "postgres" and replicaCount > 1; set to [] to
+# disable. whenUnsatisfiable is ScheduleAnyway, so this never blocks scheduling.
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+
+# PodDisruptionBudget for the PostgreSQL Deployment. Only rendered when
+# database.engine = "postgres" and replicaCount > 1: with SQLite there is a
+# single pod holding the only copy of the database, and a budget would block
+# node drains indefinitely without protecting anything.
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+  # Takes precedence over maxUnavailable when set. Do not set this to the same
+  # number as replicaCount, or node drains will never complete.
+  minAvailable: ""
+
 # Size of the per-pod PersistentVolumeClaim holding the SQLite database file.
-# Unused when database.engine = "postgres".
+# Unused when database.engine = "postgres". Cannot be changed on an existing
+# release: a StatefulSet's volumeClaimTemplates are immutable.
 sqliteVolumeSize: 100M
+# StorageClass for that PersistentVolumeClaim. Empty means "use the cluster
+# default", which leaves the PVC Pending forever on a cluster that has no
+# default StorageClass. Use "-" to request an empty StorageClass name, i.e. to
+# disable dynamic provisioning and bind a pre-created PersistentVolume.
+sqliteStorageClass: ""
 
 # See: https://github.com/acme-dns/acme-dns
 config: |
@@ -230,7 +285,8 @@ config: |
   ip = "0.0.0.0"
   # disable registration endpoint
   disable_registration = false
-  # listen port, eg. 443 for default HTTPS
+  # listen port, eg. 443 for default HTTPS. Keep this in sync with
+  # containerPorts.api above.
   port = "80"
   # possible values: "letsencrypt", "letsencryptstaging", "cert", "none"
   tls = "none"

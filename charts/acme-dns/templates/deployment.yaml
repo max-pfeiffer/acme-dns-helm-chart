@@ -11,92 +11,17 @@ spec:
   replicas: {{ .Values.replicaCount }}
   {{- with .Values.strategy }}
   strategy:
-    {{- toYaml . | nindent 4 }}
+    type: {{ .type }}
+    {{- if eq .type "RollingUpdate" }}
+    {{- with .rollingUpdate }}
+    rollingUpdate:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- end }}
   {{- end }}
   selector:
     matchLabels:
       {{- include "acme-dns.selectorLabels" . | nindent 6 }}
   template:
-    metadata:
-      {{- with .Values.podAnnotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      labels:
-        {{- include "acme-dns.labels" . | nindent 8 }}
-        {{- with .Values.podLabels }}
-        {{- toYaml . | nindent 8 }}
-        {{- end }}
-    spec:
-      {{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      serviceAccountName: {{ include "acme-dns.serviceAccountName" . }}
-      {{- with .Values.podSecurityContext }}
-      securityContext:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      containers:
-        - name: {{ .Chart.Name }}
-          {{- with .Values.securityContext }}
-          securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
-          ports:
-            - name: api
-              containerPort: {{ .Values.services.api.ports.api }}
-              protocol: TCP
-            - name: dns-tcp
-              containerPort: {{ .Values.services.dns.ports.dnsTcp }}
-              protocol: TCP
-            - name: dns-udp
-              containerPort: {{ .Values.services.dns.ports.dnsUdp }}
-              protocol: UDP
-          {{- with .Values.livenessProbe }}
-          livenessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.readinessProbe }}
-          readinessProbe:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          {{- with .Values.resources }}
-          resources:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-          volumeMounts:
-            - name: config
-              mountPath: "/etc/acme-dns"
-              readOnly: true
-            - name: tmp
-              mountPath: "/tmp"
-            - name: home
-              mountPath: "/root"
-      {{- with .Values.nodeSelector }}
-      nodeSelector:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.affinity }}
-      affinity:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      {{- with .Values.tolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      volumes:
-        - name: config
-          secret:
-            secretName: {{ include "acme-dns.fullname" . }}
-        - name: tmp
-          emptyDir: {}
-        # Writable home dir for the container's WORKDIR (/root); used e.g. as
-        # the default relative path for acme_cache_dir when tls = "letsencrypt".
-        # Note that this is per-pod and lost on restart: with more than one
-        # replica, terminate TLS elsewhere and use tls = "none" or "cert".
-        - name: home
-          emptyDir: {}
+    {{- include "acme-dns.podTemplate" . | nindent 4 }}
 {{- end }}
