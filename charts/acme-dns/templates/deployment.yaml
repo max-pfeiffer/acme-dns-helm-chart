@@ -1,17 +1,18 @@
 {{- include "acme-dns.validateValues" . }}
-{{- if eq .Values.database.engine "sqlite" }}
+{{- if eq .Values.database.engine "postgres" }}
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
-  # Distinct from the Deployment name on purpose, see acme-dns.statefulSetName.
-  name: {{ include "acme-dns.statefulSetName" . }}
+  # Distinct from the StatefulSet name on purpose, see acme-dns.deploymentName.
+  name: {{ include "acme-dns.deploymentName" . }}
   labels:
     {{- include "acme-dns.labels" . | nindent 4 }}
 spec:
-  serviceName: {{ include "acme-dns.fullname" . }}
-  # acme-dns keeps its state in a single SQLite file on the volumeClaimTemplate
-  # below, which cannot be shared between pods. Enforced by validateValues.
   replicas: {{ .Values.replicaCount }}
+  {{- with .Values.strategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "acme-dns.selectorLabels" . | nindent 6 }}
@@ -70,8 +71,6 @@ spec:
             - name: config
               mountPath: "/etc/acme-dns"
               readOnly: true
-            - name: sqlite
-              mountPath: "/var/lib/acme-dns"
             - name: tmp
               mountPath: "/tmp"
             - name: home
@@ -96,15 +95,8 @@ spec:
           emptyDir: {}
         # Writable home dir for the container's WORKDIR (/root); used e.g. as
         # the default relative path for acme_cache_dir when tls = "letsencrypt".
+        # Note that this is per-pod and lost on restart: with more than one
+        # replica, terminate TLS elsewhere and use tls = "none" or "cert".
         - name: home
           emptyDir: {}
-  volumeClaimTemplates:
-  - metadata:
-      name: sqlite
-    spec:
-      accessModes:
-        - "ReadWriteOnce"
-      resources:
-        requests:
-          storage: {{ .Values.sqliteVolumeSize }}
 {{- end }}

@@ -1,3 +1,32 @@
+{{- if eq .Values.database.engine "postgres" }}
+acme-dns is running as a Deployment ({{ include "acme-dns.deploymentName" . }}) with {{ .Values.replicaCount }} replica(s)
+against PostgreSQL. Please read the following before scaling up:
+
+  * Run the first release at replicaCount=1. acme-dns creates its schema and runs
+    the v0 -> v1 migration on startup, without locking; concurrent startups
+    against an unmigrated database can duplicate or drop rows in the txt table.
+    Scale up once the pods are healthy.
+
+  * acme-dns {{ .Chart.AppVersion }} does not create an index on txt.Subdomain, so every DNS
+    query is a full table scan. Create it once, by hand:
+
+      CREATE INDEX IF NOT EXISTS idx_txt_subdomain ON txt (Subdomain);
+
+    Later acme-dns versions create the same index at startup, so this is
+    forward compatible.
+
+  * Do not use tls = "letsencrypt" / "letsencryptstaging" with more than one
+    replica. Each replica keeps its own certificate cache and answers the ACME
+    DNS-01 challenge for its own certificate from process memory, so validation
+    fails whenever the CA reaches a different pod. Use tls = "cert" with a
+    shared certificate, or tls = "none" behind an Ingress/HTTPRoute.
+
+  * Two concurrent /update calls for the same subdomain can overwrite the same
+    txt row, losing one of the two challenge values. The window is small, but it
+    exists only with more than one replica.
+
+{{- end }}
+
 1. Get the application URL by running these commands:
 {{- if .Values.httpRoute.enabled }}
 {{- if .Values.httpRoute.hostnames }}
@@ -19,13 +48,13 @@
   {{- end }}
 {{- end }}
 {{- else if contains "NodePort" .Values.services.api.type }}
-  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "acme-dns.fullname" . }})
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "acme-dns.fullname" . }}-api)
   export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
   echo http://$NODE_IP:$NODE_PORT
 {{- else if contains "LoadBalancer" .Values.services.api.type }}
      NOTE: It may take a few minutes for the LoadBalancer IP to be available.
-           You can watch its status by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "acme-dns.fullname" . }}'
-  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "acme-dns.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+           You can watch its status by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "acme-dns.fullname" . }}-api'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "acme-dns.fullname" . }}-api --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
   echo http://$SERVICE_IP:{{ .Values.services.api.ports.api }}
 {{- else if contains "ClusterIP" .Values.services.api.type }}
   export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "acme-dns.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")

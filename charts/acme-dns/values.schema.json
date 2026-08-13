@@ -3,8 +3,17 @@
   "title": "acme-dns",
   "type": "object",
   "additionalProperties": true,
-  "required": ["image", "services", "config"],
+  "required": ["image", "services", "config", "database"],
   "properties": {
+    "database": {
+      "type": "object",
+      "required": ["engine"],
+      "properties": {
+        "engine": { "type": "string", "enum": ["sqlite", "postgres"] }
+      }
+    },
+    "replicaCount": { "type": "integer", "minimum": 1 },
+    "strategy": { "type": "object" },
     "image": {
       "type": "object",
       "required": ["repository"],

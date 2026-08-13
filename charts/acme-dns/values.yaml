@@ -8,7 +8,33 @@ image:
   # This sets the pull policy for images.
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "v1.0"
+  tag: ""
+
+database:
+  # Which database engine the `config` blob at the bottom of this file is set up
+  # to use. This must match [database].engine in `config`: the chart does not
+  # parse that blob, it uses this value to pick its topology.
+  #
+  #   sqlite   -> StatefulSet with a per-pod PersistentVolumeClaim holding the
+  #               database file. replicaCount must be 1.
+  #   postgres -> Deployment, no PersistentVolumeClaim. replicaCount may be > 1;
+  #               all replicas share the one PostgreSQL database.
+  #
+  # Note that acme-dns v2.x names the SQLite engine "sqlite", not "sqlite3".
+  engine: sqlite
+
+# Number of acme-dns replicas. Only values > 1 with database.engine = "postgres"
+# are supported; see the notes printed after installation before scaling up.
+replicaCount: 1
+
+# Rollout strategy for the Deployment (database.engine = "postgres" only). The
+# default keeps every replica serving during a rollout, which matters because
+# these pods answer DNS queries for in-flight ACME challenges.
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 0
+    maxSurge: 1
 
 # This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
 imagePullSecrets: []
@@ -161,6 +187,8 @@ tolerations: []
 
 affinity: {}
 
+# Size of the per-pod PersistentVolumeClaim holding the SQLite database file.
+# Unused when database.engine = "postgres".
 sqliteVolumeSize: 100M
 
 # See: https://github.com/acme-dns/acme-dns
@@ -189,12 +217,13 @@ config: |
   debug = false
 
   [database]
-  # Database engine to use, sqlite3 or postgres
-  engine = "sqlite3"
-  # Connection string, filename for sqlite3 and postgres://$username:$password@$host/$db_name for postgres
-  # Please note that the default Docker image uses path /var/lib/acme-dns/acme-dns.db for sqlite3
+  # Database engine to use, sqlite or postgres. Keep this in sync with the
+  # database.engine value above. acme-dns v2.x rejects the old "sqlite3" name.
+  engine = "sqlite"
+  # Connection string, filename for sqlite and postgres://$username:$password@$host/$db_name for postgres
+  # Please note that the default Docker image uses path /var/lib/acme-dns/acme-dns.db for sqlite
   connection = "/var/lib/acme-dns/acme-dns.db"
-  # connection = "postgres://user:password@localhost/acmedns_db"
+  # connection = "postgres://user:password@postgresql/acmedns_db?sslmode=require"
 
   [api]
   # listen ip eg. 127.0.0.1

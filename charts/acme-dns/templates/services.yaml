@@ -44,7 +44,7 @@ spec:
       protocol: TCP
       name: api
   selector:
-    statefulset.kubernetes.io/pod-name: {{ include "acme-dns.fullname" . }}-0
+    {{- include "acme-dns.serviceSelector" . | nindent 4 }}
 ---
 apiVersion: v1
 kind: Service
@@ -71,4 +71,4 @@ spec:
       protocol: UDP
       name: dns-udp
   selector:
-    statefulset.kubernetes.io/pod-name: {{ include "acme-dns.fullname" . }}-0
+    {{- include "acme-dns.serviceSelector" . | nindent 4 }}
