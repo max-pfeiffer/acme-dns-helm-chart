@@ -15,11 +15,35 @@ jobs:
           fetch-depth: 0
       - name: Lint Helm chart
         run: |
-          helm lint charts/acme-dns
-          helm lint charts/acme-dns --set ingress.enabled=true
-          helm lint charts/acme-dns --set httpRoute.enabled=true
+          helm lint --strict charts/acme-dns
+          helm lint --strict charts/acme-dns --set ingress.enabled=true
+          helm lint --strict charts/acme-dns --set httpRoute.enabled=true
+          helm lint --strict charts/acme-dns --set database.engine=postgres
       - name: Render Helm chart templates
         run: |
           helm template charts/acme-dns > /dev/null
           helm template charts/acme-dns --set ingress.enabled=true > /dev/null
           helm template charts/acme-dns --set httpRoute.enabled=true > /dev/null
+          helm template charts/acme-dns --set sqliteStorageClass=fast > /dev/null
+      - name: Render Helm chart templates with PostgreSQL
+        run: |
+          helm template charts/acme-dns --set database.engine=postgres > /dev/null
+          helm template charts/acme-dns --set database.engine=postgres --set replicaCount=3 > /dev/null
+          helm template charts/acme-dns --set database.engine=postgres --set strategy.type=Recreate --set strategy.rollingUpdate=null > /dev/null
+          helm template charts/acme-dns --set database.engine=postgres --set strategy.type=Recreate > /dev/null
+      - name: Check unsupported value combinations are rejected
+        # `helm lint` only logs a template `fail` and still exits 0, so the
+        # rejection has to be asserted with `helm template`.
+        run: |
+          ! helm template charts/acme-dns --set replicaCount=2 > /dev/null 2>&1
+      - name: Validate rendered manifests against the Kubernetes API schema
+        run: |
+          curl -sSLo /tmp/kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
+          for args in \
+            "" \
+            "--set ingress.enabled=true" \
+            "--set database.engine=postgres --set replicaCount=3" \
+            "--set database.engine=postgres --set strategy.type=Recreate --set strategy.rollingUpdate=null"; do
+            helm template charts/acme-dns $args | /tmp/kubeconform -strict -summary -
+          done

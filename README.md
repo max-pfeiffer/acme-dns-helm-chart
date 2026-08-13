@@ -19,7 +19,8 @@ its own independent database. The chart refuses to render `replicaCount` > 1 in 
 ```yaml
 database:
   engine: postgres
-replicaCount: 2
+# Start at 1 and scale up once the pods are healthy, see the first bullet below.
+replicaCount: 1
 config: |
   [database]
   engine = "postgres"
@@ -30,8 +31,9 @@ acme-dns creates its own schema on startup. Before running more than one replica
 * **Run the first release with `replicaCount: 1`.** Schema creation and the v0 → v1 migration are not locked, so
   concurrent startups against an unmigrated database can duplicate or drop rows in the `txt` table. Scale up
   afterwards.
-* **Create the index by hand.** acme-dns v2.0.2 does not create an index on `txt.Subdomain`, so every DNS query
-  is a full table scan whose cost grows with the number of registered accounts:
+* **Create the index by hand.** acme-dns does not create an index on `txt.Subdomain` up to and including v2.0.2,
+  so every DNS query is a full table scan whose cost grows with the number of registered accounts. Check whether
+  the version you run still needs this:
   ```sql
   CREATE INDEX IF NOT EXISTS idx_txt_subdomain ON txt (Subdomain);
   ```
@@ -48,6 +50,37 @@ The PostgreSQL Deployment (`-stateless` suffix) deliberately has a different nam
 (`-stateful` suffix), because Helm cannot change the kind of an existing resource in place. Switching engines therefore works as a
 normal `helm upgrade`: the StatefulSet is removed and the Deployment created. Its PersistentVolumeClaim is
 *not* deleted with it — remove it yourself once you no longer need the SQLite data.
+
+**The switch moves the Kubernetes objects, not your data.** acme-dns simply creates an empty schema in the
+PostgreSQL database it is pointed at. Every account registered against SQLite stays behind on the retained
+PersistentVolumeClaim, which means every `acmedns.json` credential your cert-manager issuers use becomes invalid
+and DNS-01 validation starts failing. Either copy the `acmedns` and `txt` tables out of the SQLite file into
+PostgreSQL *before* switching, or plan to re-register every domain afterwards. To get at the old file while the
+SQLite release is still running:
+```shell
+$ kubectl exec -n yournamespace acme-dns-stateful-0 -- sqlite3 /var/lib/acme-dns/acme-dns.db .dump > acme-dns.sql
+```
+
+## Values worth knowing about
+| Value                       | Purpose                                                                             |
+|-----------------------------|-------------------------------------------------------------------------------------|
+| `containerPorts`            | Ports acme-dns binds inside the container. Must match the `config` blob.             |
+| `services.{api,dns}.ports`  | Ports clients connect to. Resolved to `containerPorts` by name, so they may differ.  |
+| `livenessProbe`             | TCP check on the DNS port, so it is unaffected by API TLS.                           |
+| `readinessProbe`            | `GET /health` on the API port. Needs `scheme: HTTPS` if acme-dns terminates TLS.     |
+| `sqliteVolumeSize`          | Size of the SQLite PersistentVolumeClaim. Immutable after install.                   |
+| `sqliteStorageClass`        | StorageClass for it. Needed on clusters without a default StorageClass.              |
+| `strategy`                  | Deployment rollout strategy (`postgres` only).                                       |
+| `topologySpreadConstraints` | Spreads replicas over nodes. A release-matching `labelSelector` is injected.         |
+| `podDisruptionBudget`       | Rendered for `postgres` with `replicaCount` > 1 only.                                |
+
+If acme-dns should terminate TLS itself, three things have to move together: `[api].port` and `tls` in the
+`config` blob, `containerPorts.api`, and `scheme: HTTPS` on `readinessProbe`. The chart does not parse the
+`config` blob, so it cannot do this for you — and with the probe left on plain HTTP the pod never becomes ready.
+
+The `acme-dns-dns` Service exposes TCP and UDP port 53 through a single `LoadBalancer`. Mixed-protocol load
+balancers are not supported by every cloud provider; if yours rejects the Service, set `services.dns.type` to
+`ClusterIP` and expose DNS another way.
 
 ## Installation
 The installation is done as follows:
