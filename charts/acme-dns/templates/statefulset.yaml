@@ -3,7 +3,8 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: {{ include "acme-dns.fullname" . }}
+  # Distinct from the Deployment name on purpose, see acme-dns.statefulSetName.
+  name: {{ include "acme-dns.statefulSetName" . }}
   labels:
     {{- include "acme-dns.labels" . | nindent 4 }}
 spec:

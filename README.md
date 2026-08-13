@@ -1,4 +1,4 @@
-# ACME DNS Server Helm Chart
+# acme-dns Server Helm Chart
 A Helm chart for [acme-dns server](https://github.com/acme-dns/acme-dns).
 
 This Helm chart runs [acme-dns](https://github.com/acme-dns/acme-dns) with either a SQLite or a PostgreSQL database.
@@ -9,8 +9,8 @@ The `database.engine` value selects the database engine and, with it, the chart'
 
 | `database.engine` | Workload                          | Storage                          | `replicaCount` |
 |-------------------|-----------------------------------|----------------------------------|----------------|
-| `sqlite`          | StatefulSet, `acme-dns`           | per-pod PersistentVolumeClaim    | `1` only       |
-| `postgres`        | Deployment, `acme-dns-server`     | none, state lives in PostgreSQL  | `1` or more    |
+| `sqlite`          | StatefulSet, `acme-dns-stateful`  | per-pod PersistentVolumeClaim    | `1` only       |
+| `postgres`        | Deployment, `acme-dns-stateless`  | none, state lives in PostgreSQL  | `1` or more    |
 
 With SQLite the database is a file on a `ReadWriteOnce` volume that cannot be shared, so each replica would get
 its own independent database. The chart refuses to render `replicaCount` > 1 in that case.
@@ -44,8 +44,8 @@ acme-dns creates its own schema on startup. Before running more than one replica
   the two challenge values. The window is small and only exists with more than one replica.
 
 ### Switching an existing release from SQLite to PostgreSQL
-The PostgreSQL Deployment deliberately has a different name (`-server` suffix) from the SQLite StatefulSet,
-because Helm cannot change the kind of an existing resource in place. Switching engines therefore works as a
+The PostgreSQL Deployment (`-stateless` suffix) deliberately has a different name from the SQLite StatefulSet
+(`-stateful` suffix), because Helm cannot change the kind of an existing resource in place. Switching engines therefore works as a
 normal `helm upgrade`: the StatefulSet is removed and the Deployment created. Its PersistentVolumeClaim is
 *not* deleted with it — remove it yourself once you no longer need the SQLite data.
 

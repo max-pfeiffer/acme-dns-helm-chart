@@ -51,13 +51,20 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Name of the StatefulSet used when database.engine is "sqlite".
+*/}}
+{{- define "acme-dns.statefulSetName" -}}
+{{- printf "%s-stateful" (include "acme-dns.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
 Name of the Deployment used when database.engine is "postgres".
 Deliberately distinct from the StatefulSet name: Helm cannot change the kind of
 an existing resource in place, so a release switching from SQLite to PostgreSQL
 would otherwise fail with an immutable-field error.
 */}}
 {{- define "acme-dns.deploymentName" -}}
-{{- printf "%s-server" (include "acme-dns.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- printf "%s-stateless" (include "acme-dns.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
@@ -69,7 +76,7 @@ pods and traffic is load balanced across them.
 */}}
 {{- define "acme-dns.serviceSelector" -}}
 {{- if eq .Values.database.engine "sqlite" -}}
-statefulset.kubernetes.io/pod-name: {{ include "acme-dns.fullname" . }}-0
+statefulset.kubernetes.io/pod-name: {{ include "acme-dns.statefulSetName" . }}-0
 {{- else -}}
 {{- include "acme-dns.selectorLabels" . -}}
 {{- end -}}
